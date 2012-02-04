@@ -1,3 +1,7 @@
+Current Status:
+Displays images stored on disk in camera folder. Swipe to move between images. HSV values of currently selected point displayed.
+
+Possible Project Names:
 Threshold Trainer
 Parameter Trainer
 CV Trainer
