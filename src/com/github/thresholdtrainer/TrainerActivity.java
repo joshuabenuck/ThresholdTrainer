@@ -30,9 +30,15 @@ import android.view.View;
 import android.view.View.OnTouchListener;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.CompoundButton;
+import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.LinearLayout.LayoutParams;
+import android.widget.ToggleButton;
+
+import com.github.thresholdtrainer.HsvRangeFinder.Range;
 
 public class TrainerActivity extends FragmentActivity {
     private static final String TAG             = "Trainer";
@@ -167,25 +173,41 @@ public class TrainerActivity extends FragmentActivity {
 		Core.flip(hsv, hsv, 1);
 		Imgproc.cvtColor(hsv, rgb, Imgproc.COLOR_HSV2RGB);
 //		Imgproc.warpAffine(mat, tmp, rot, mat.size());
+		rf = new HsvRangeFinder();
 		updateDisplay();
 	}
 	
+	HsvRangeFinder rf;
 	public void updateDisplay() {
-		double[] vals = hsv.get(y, x);
-		hue = vals[0];
-		sat = vals[1];
-		value = vals[2];
 		Mat tmp = rgb.clone();
-		Core.putText(tmp, "H: " + hue + " S: " + sat + " V: " + value, 
-				new Point(0, 50), 3, 1, new Scalar(255, 0, 0, 255), 2);
-		Core.circle(tmp, new Point(x, y), 3, new Scalar(255, 0, 0, 255));
+		if (trainingMode && !(x==0 && y==0)) {
+			showHsvValues(tmp);
+		}
 		Imgproc.cvtColor(tmp, tmp, Imgproc.COLOR_RGB2RGBA);
 //		Core.mixChannels(Arrays.asList(mat), Arrays.asList(tmp), Arrays.asList(new Integer[] {1, 3}));
 		Bitmap bm = Bitmap.createBitmap(tmp.cols(), tmp.rows(), Config.ARGB_8888);
 		Utils.matToBitmap(tmp, bm);
 		view.setImageBitmap(bm);		
 	}
+	private Mat showHsvValues(Mat tmp) {
+		double[] vals = hsv.get(y, x);
+		hue = vals[0];
+		sat = vals[1];
+		value = vals[2];
+		rf.record(hue, sat, value);
+		Core.putText(tmp, "H: " + hue + " S: " + sat + " V: " + value, 
+				new Point(0, 50), 3, 1, new Scalar(255, 0, 0, 255), 2);
+		int textY = 100;
+		for (Range r : rf.computeRanges(rf.hvalues)) {
+			Core.putText(tmp, "Min H: " + r.min + " Max H: " + r.max, 
+					new Point(0, textY), 3, 1, new Scalar(255, 0, 0, 255), 2);
+			textY+=50;
+		}
+		Core.circle(tmp, new Point(x, y), 3, new Scalar(255, 0, 0, 255));
+		return tmp;
+	}
 	
+	boolean trainingMode = false;
     /** Called when the activity is first created. */
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -225,7 +247,6 @@ public class TrainerActivity extends FragmentActivity {
 		vidlay.setGravity(Gravity.TOP | Gravity.LEFT);
 		vidlay.addView(view);
 		frame.addView(vidlay);
-		setContentView(frame);
 //
 //		// make the glview overlay ontop of video preview
 //		mPreview.setZOrderMediaOverlay(false);
@@ -253,9 +274,18 @@ public class TrainerActivity extends FragmentActivity {
 //			}
 //		});
 
-//		LinearLayout buttons = new LinearLayout(getApplicationContext());
-//		buttons.setLayoutParams(new LayoutParams(LayoutParams.WRAP_CONTENT,
-//				LayoutParams.WRAP_CONTENT));
+		LinearLayout buttons = new LinearLayout(getApplicationContext());
+		buttons.setGravity(Gravity.BOTTOM | Gravity.LEFT);
+		ToggleButton train = new ToggleButton(getApplicationContext());
+		train.setText("Train");
+		train.setTextOff("Train");
+		train.setTextOn("Stop");
+		train.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				trainingMode = isChecked;
+			}
+		});
+		buttons.addView(train);
 //
 //		buttons.addView(capture_button);
 //
@@ -272,8 +302,8 @@ public class TrainerActivity extends FragmentActivity {
 //		});
 //		buttons.addView(focus_button);
 //
-//		frame.addView(buttons);
-//		setContentView(frame);
+		frame.addView(buttons);
+		setContentView(frame);
 //		toasts(DIALOG_OPENING_TUTORIAL);
         
 //        setContentView(new CameraView(this));
