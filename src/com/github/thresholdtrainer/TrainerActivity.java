@@ -13,6 +13,7 @@ import org.opencv.core.Size;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
@@ -35,7 +36,6 @@ import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.LinearLayout.LayoutParams;
 import android.widget.ToggleButton;
 
 import com.github.thresholdtrainer.HsvRangeFinder.Range;
@@ -96,8 +96,15 @@ public class TrainerActivity extends FragmentActivity {
     	Log.i(TAG, "right");
     	showImageAtPosition(-1);
     }
-    public void onBottomTop() {}
-    public void onTopBottom() {}
+    
+    public void onBottomTop() {
+    }
+    
+    public void onTopBottom() {
+    	toSkip.edit().putBoolean(images.get(currentImage).getName(), true).commit();
+    	images.remove(currentImage);
+    	showImageAtPosition(0);
+    }
 
     public TrainerActivity() {
         Log.i(TAG, "Instantiated new " + this.getClass());
@@ -135,11 +142,14 @@ public class TrainerActivity extends FragmentActivity {
 	ImageView view;
 
 	List<File> images = new ArrayList<File>();
+	public static final String IMAGES_TO_SKIP = "thresholdtrainer.imagestoskip";
 	public void loadImageList() {
-		for (File image : new File(Environment.getExternalStorageDirectory() + "/" + Environment.DIRECTORY_DCIM + "/Camera").listFiles())
+		for (File image : new File(Environment.getExternalStorageDirectory() + "/" + 
+								   Environment.DIRECTORY_DCIM + "/Camera").listFiles())
 		{
 			if (image.isFile() && image.getName().endsWith(".jpg"))
 			{
+				if (toSkip.getBoolean(image.getName(), false) == true) continue;
 				images.add(image);
 			}
 		}
@@ -208,11 +218,13 @@ public class TrainerActivity extends FragmentActivity {
 	}
 	
 	boolean trainingMode = false;
+	SharedPreferences toSkip;
     /** Called when the activity is first created. */
     @Override
     public void onCreate(Bundle savedInstanceState) {
         Log.i(TAG, "onCreate");
         super.onCreate(savedInstanceState);
+    	toSkip = getSharedPreferences(IMAGES_TO_SKIP, 0);
 		setFullscreen();
 		setOrientation();
 		disableScreenTurnOff();
@@ -222,7 +234,7 @@ public class TrainerActivity extends FragmentActivity {
 				if (e.getAction() == MotionEvent.ACTION_DOWN || e.getAction() == MotionEvent.ACTION_MOVE) {
 		        	x = (int)e.getX(0);
 		        	y = (int)e.getY(0);
-		        	Log.i(TAG, "x: " + x + " y: " + y);
+//		        	Log.i(TAG, "x: " + x + " y: " + y);
 		        	updateDisplay();
 				}
 				gd.onTouchEvent(e);
