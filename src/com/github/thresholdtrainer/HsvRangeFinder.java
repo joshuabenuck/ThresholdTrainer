@@ -19,8 +19,9 @@ public class HsvRangeFinder {
 		if (!vvalues.contains(h)) vvalues.add(v);
 	}
 	public List<Range> computeRanges(SortedSet<Double> values) {
-		Double MAX_JUMP = 5.0;
+		Double MAX_JUMP = 2.0;
 		List<Range> ranges = new ArrayList<Range>();
+		if (values.size() == 0) return ranges;
 		Range r = new Range();
 		r.min = values.first();
 		r.max = values.first();
@@ -35,5 +36,34 @@ public class HsvRangeFinder {
 			r.max = d;
 		}
 		return ranges;
+	}
+	public String persistValues(List<Double> hs, List<Double> ss, List<Double> vs) {
+		StringBuilder out = new StringBuilder();
+		out.append("{\n");
+			out.append("\t\"h\" : ");
+			out.append(persistValues(hs));
+			out.append(",\n");
+
+			out.append("\t\"s\" : ");
+			out.append(persistValues(ss));
+			out.append(",\n");
+
+			out.append("\t\"v\" : ");
+			out.append(persistValues(vs));
+			out.append("\n");
+		out.append("}\n");
+		return out.toString();
+	}
+	public String persistValues(List<Double> values) {
+		StringBuilder out = new StringBuilder();
+		out.append("{\n");
+		for (Double v : values) {
+			out.append("\t\t");
+			out.append(v);
+			out.append(",");
+		}
+		if (values.size() > 0) out.deleteCharAt(out.length() - 1);
+		out.append("}\n");
+		return out.toString();
 	}
 }

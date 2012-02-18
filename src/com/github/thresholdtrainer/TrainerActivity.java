@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.opencv.android.Utils;
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
@@ -158,7 +159,7 @@ public class TrainerActivity extends FragmentActivity {
 	int currentImage = 0;
 	Mat hsv, rgb;
 	double hue, sat, value;
-	int x, y;
+	int x, y, rx1, ry1, rx2, ry2;
 	public void showImageAtPosition(int offset)
 	{
 		currentImage += offset;
@@ -193,31 +194,76 @@ public class TrainerActivity extends FragmentActivity {
 		if (trainingMode && !(x==0 && y==0)) {
 			showHsvValues(tmp);
 		}
-		Imgproc.cvtColor(tmp, tmp, Imgproc.COLOR_RGB2RGBA);
+		if (regionMode && !(rx1==0 && ry1== 0)) {
+			showHsvValues(tmp);
+		}
+		if (thresholdMode) {
+			Mat tmp2 = new Mat(hsv.size(), CvType.CV_8UC1);
+			Mat result = new Mat(hsv.size(), CvType.CV_8UC1);
+			Core.inRange(hsv, new Scalar(0, 0, 0), new Scalar(0, 0, 0), result);
+			for (Range h : rf.computeRanges(rf.hvalues)) {
+//				Core.inRange(hsv, new Scalar(h.min, 0, 0), 
+//						new Scalar(h.max, 256, 256), tmp2);
+//				Core.bitwise_or(tmp2, result, result);
+				for (Range s : rf.computeRanges(rf.svalues)) {
+					for (Range v : rf.computeRanges(rf.vvalues)) {
+						Core.inRange(hsv, new Scalar(h.min, s.min, v.min), 
+								new Scalar(h.max, s.max, v.max), tmp2);
+						Core.bitwise_or(tmp2, result, result);
+					}
+				}
+			}
+			Imgproc.cvtColor(result, tmp, Imgproc.COLOR_GRAY2RGBA, 4);
+		}
+		else {
+			Imgproc.cvtColor(tmp, tmp, Imgproc.COLOR_RGB2RGBA);
+		}
 //		Core.mixChannels(Arrays.asList(mat), Arrays.asList(tmp), Arrays.asList(new Integer[] {1, 3}));
 		Bitmap bm = Bitmap.createBitmap(tmp.cols(), tmp.rows(), Config.ARGB_8888);
 		Utils.matToBitmap(tmp, bm);
 		view.setImageBitmap(bm);		
 	}
 	private Mat showHsvValues(Mat tmp) {
-		double[] vals = hsv.get(y, x);
-		hue = vals[0];
-		sat = vals[1];
-		value = vals[2];
-		rf.record(hue, sat, value);
-		Core.putText(tmp, "H: " + hue + " S: " + sat + " V: " + value, 
-				new Point(0, 50), 3, 1, new Scalar(255, 0, 0, 255), 2);
+		if (trainingMode) {
+			double[] vals = hsv.get(y, x);
+			hue = vals[0];
+			sat = vals[1];
+			value = vals[2];
+			rf.record(hue, sat, value);
+			Core.putText(tmp, "H: " + hue + " S: " + sat + " V: " + value, 
+					new Point(0, 50), 3, 1, new Scalar(255, 0, 0, 255), 2);
+			Core.circle(tmp, new Point(x, y), 3, new Scalar(255, 0, 0, 255));
+		}
+		if (regionMode) {
+			Core.putText(tmp, "X1: " + rx1 + " Y1: " + ry1 + " X2: " + rx2 + " Y2: " + ry2, 
+					new Point(0, 50), 3, 1, new Scalar(255, 0, 0, 255), 2);			
+			Core.rectangle(tmp, new Point(rx1, ry1), new Point(rx2, ry2), new Scalar(255, 0, 0, 255));
+		}
 		int textY = 100;
 		for (Range r : rf.computeRanges(rf.hvalues)) {
 			Core.putText(tmp, "Min H: " + r.min + " Max H: " + r.max, 
 					new Point(0, textY), 3, 1, new Scalar(255, 0, 0, 255), 2);
 			textY+=50;
 		}
-		Core.circle(tmp, new Point(x, y), 3, new Scalar(255, 0, 0, 255));
+		for (Range r : rf.computeRanges(rf.svalues)) {
+			Core.putText(tmp, "Min S: " + r.min + " Max S: " + r.max, 
+					new Point(0, textY), 3, 1, new Scalar(255, 0, 0, 255), 2);
+			textY+=50;
+		}
+		for (Range r : rf.computeRanges(rf.vvalues)) {
+			Core.putText(tmp, "Min V: " + r.min + " Max V: " + r.max, 
+					new Point(0, textY), 3, 1, new Scalar(255, 0, 0, 255), 2);
+			textY+=50;
+		}
 		return tmp;
 	}
 	
 	boolean trainingMode = false;
+	boolean regionMode = false;
+	boolean thresholdMode = false;
+	ToggleButton region;
+	ToggleButton train;
+	ToggleButton threshold;
 	SharedPreferences toSkip;
     /** Called when the activity is first created. */
     @Override
@@ -231,13 +277,41 @@ public class TrainerActivity extends FragmentActivity {
 		view = new ImageView(this);
 		view.setOnTouchListener(new OnTouchListener() {
 			public boolean onTouch(View arg0, MotionEvent e) {
-				if (e.getAction() == MotionEvent.ACTION_DOWN || e.getAction() == MotionEvent.ACTION_MOVE) {
+				if (trainingMode && (e.getAction() == MotionEvent.ACTION_DOWN || e.getAction() == MotionEvent.ACTION_MOVE)) {
 		        	x = (int)e.getX(0);
 		        	y = (int)e.getY(0);
 //		        	Log.i(TAG, "x: " + x + " y: " + y);
 		        	updateDisplay();
 				}
-				gd.onTouchEvent(e);
+				if (regionMode) {
+					switch(e.getAction()) {
+					case MotionEvent.ACTION_DOWN:
+						rf = new HsvRangeFinder();
+						rx1 = (int) e.getX(0);
+						ry1 = (int) e.getY(0);
+						rx2 = rx1;
+						ry2 = ry1;
+						updateDisplay();
+						break;
+					case MotionEvent.ACTION_MOVE:
+						rx2 = (int) e.getX(0);
+						ry2 = (int) e.getY(0);
+						updateDisplay();
+						break;
+					case MotionEvent.ACTION_UP:
+						for (int i = rx1; i <= rx2; i++) {
+							for (int j = ry1; j <= ry2; j++) {
+								double[] vals = hsv.get(j, i);
+								double h = vals[0];
+								double s = vals[1];
+								double v = vals[2];
+								rf.record(h, s, v);
+							}
+						}
+						updateDisplay();
+					}
+				}
+				if (!trainingMode && !regionMode) gd.onTouchEvent(e);
 				return true;
 			}
 		});
@@ -288,16 +362,41 @@ public class TrainerActivity extends FragmentActivity {
 
 		LinearLayout buttons = new LinearLayout(getApplicationContext());
 		buttons.setGravity(Gravity.BOTTOM | Gravity.LEFT);
-		ToggleButton train = new ToggleButton(getApplicationContext());
+		train = new ToggleButton(getApplicationContext());
 		train.setText("Train");
 		train.setTextOff("Train");
 		train.setTextOn("Stop");
 		train.setOnCheckedChangeListener(new OnCheckedChangeListener() {
 			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
 				trainingMode = isChecked;
+				region.setEnabled(!isChecked);
 			}
 		});
 		buttons.addView(train);
+		
+		region = new ToggleButton(getApplicationContext());
+		region.setText("Region");
+		region.setTextOff("Region");
+		region.setTextOn("Stop");
+		region.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				regionMode = isChecked;
+				train.setEnabled(!isChecked);
+			}
+		});
+		buttons.addView(region);
+
+		threshold = new ToggleButton(getApplicationContext());
+		threshold.setText("Threshold");
+		threshold.setTextOff("Threshold");
+		threshold.setTextOn("Normal");
+		threshold.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				thresholdMode = isChecked;
+				updateDisplay();
+			}
+		});
+		buttons.addView(threshold);
 //
 //		buttons.addView(capture_button);
 //
